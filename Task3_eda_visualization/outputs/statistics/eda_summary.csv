@@ -1,0 +1,25 @@
+﻿,bbc_processed.csv,cbsnews_processed.csv,dw_processed.csv,foxnews_processed.csv,guardian_processed.csv,independent_processed.csv,nbcnews_processed.csv,npr_processed.csv,techcrunch_processed.csv,theverge_processed.csv,tribune_processed.csv,wired_processed.csv
+rows,9995,10000,9400,7075,1131,10000,6797,7657,9513,8025,5804,6398
+columns,6,6,6,6,6,6,6,6,6,6,6,6
+blank title,0,0,0,0,0,0,0,0,0,0,0,0
+blank description,134,0,917,11,0,1964,15,7,279,0,11,1
+duplicate urls,0,0,0,0,0,0,0,0,0,0,0,0
+unique urls,9995,10000,9400,7075,1131,10000,6797,7657,9513,8025,5804,6398
+invalid urls,0,0,0,0,0,0,0,0,0,0,1,0
+duplicate titles,272,6,643,21,5,75,345,302,8,18,20,0
+blank/invalid dates,0,0,152,0,0,0,0,0,0,0,0,0
+future dates,0,0,0,0,0,0,0,0,0,0,0,0
+oldest date,30/04/2025,13/10/2011,10/12/2002,30/01/2017,14/08/2014,30/09/2026,14/11/2019,24/02/2023,30/11/2015,19/07/2019,11/03/2020,09/02/2016
+newest date,25/10/2026,25/10/2026,25/10/2026,25/10/2026,25/10/2026,25/10/2026,25/10/2026,25/10/2026,25/10/2026,25/10/2026,25/10/2026,25/10/2026
+days covered,544,5492,8721,3556,4456,26,2538,1340,3983,2656,2420,3912
+author Unknown/blank,267,1411,7872,1528,0,5,59,514,2699,0,14,0
+unique authors,342,713,260,381,718,1281,566,786,46,94,272,635
+title avg words,8.6,12.8,4.1,13.6,13.3,12.5,12.3,10.5,10.2,9.8,9.4,10.6
+title max words,34,27,23,24,31,29,28,23,26,36,27,20
+description avg words,17.9,23.2,20.9,25.2,48.8,17.7,25.5,47.1,26.2,42.3,12.1,23
+description max words,214,81,67,396,471,302,238,503,169,163,30,44
+description same as title,2152,129,2,1,0,18,0,18,1,0,2091,1
+non-Latin titles,7279,0,3039,0,0,0,0,0,0,1,0,0
+broken accents (mojibake),0,0,0,0,0,0,0,0,0,0,0,0
+#NAME? damage,0,0,0,0,0,0,0,0,0,0,0,0
+extra spaces / newlines,0,0,0,0,0,0,0,0,0,0,0,0
