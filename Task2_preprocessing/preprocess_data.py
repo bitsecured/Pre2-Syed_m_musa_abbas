@@ -1,10 +1,11 @@
 """Clean a scraped news CSV (title, description, date_of_publication, author_name, url, source).
 
 Usage:
-    python preprocess_news.py bbc.csv                 -> bbc_clean.csv
-    python preprocess_news.py bbc.csv -o out.csv
-    python preprocess_news.py bbc.csv --no-xlsx       (CSV only)
-    python preprocess_news.py bbc.csv --date-format "%Y-%m-%d"   (keep ISO dates, e.g. for PostgreSQL)
+    python preprocess_data.py
+    python preprocess_data.py --date-format "%Y-%m-%d"   (keep ISO dates, e.g. for PostgreSQL)
+
+Reads every source CSV from Task1_scrapping/data/raw and saves processed CSVs
+inside Task2_preprocessing/data/processed. CSV output only; no Excel files.
 
 What it does
   title / description : fixes spacing, capitalises the first letter (Latin script only)
@@ -159,40 +160,6 @@ def clean_source(v):
     return ACRONYMS.get(v.lower(), v.upper() if len(v) <= 4 else v[:1].upper() + v[1:])
 
 
-# --------------------------------------------------------------------------- excel
-COL_WIDTHS = {"title": 60, "description": 90, "date_of_publication": 16,
-              "author_name": 32, "url": 55, "source": 16}
-
-
-def save_xlsx(df, path):
-    """Real Excel file: fixed column widths, dates kept as text (no ##### or day/month flips),
-    wrapped text, frozen + filtered header. Nothing is guessed when the file is opened."""
-    from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font, PatternFill
-    from openpyxl.utils import get_column_letter
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "articles"
-    ws.append(list(df.columns))
-    for row in df.itertuples(index=False):
-        ws.append([str(v) for v in row])
-    for r in ws.iter_rows(min_row=2):
-        for c in r:
-            c.data_type = "s"                               # text, so "=..." or "-..." is never a formula
-            c.number_format = "@"
-            c.alignment = Alignment(wrap_text=True, vertical="top")
-    for i, name in enumerate(df.columns, 1):
-        ws.column_dimensions[get_column_letter(i)].width = COL_WIDTHS.get(name, 20)
-        h = ws.cell(row=1, column=i)
-        h.font = Font(bold=True, color="FFFFFF")
-        h.fill = PatternFill("solid", fgColor="305496")
-        h.alignment = Alignment(vertical="center")
-    ws.freeze_panes = "A2"
-    ws.auto_filter.ref = ws.dimensions
-    wb.save(path)
-
-
 # --------------------------------------------------------------------------- main
 def preprocess(df, date_fmt=DATE_OUT):
     out = pd.DataFrame(index=df.index)
@@ -205,33 +172,95 @@ def preprocess(df, date_fmt=DATE_OUT):
     return out
 
 
-if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("input")
-    ap.add_argument("-o", "--output")
-    ap.add_argument("--no-xlsx", action="store_true", help="do not also write the .xlsx file")
-    ap.add_argument("--date-format", default=DATE_OUT, help='output date format (default "%%d/%%m/%%Y")')
-    args = ap.parse_args()
 
-    raw = pd.read_csv(args.input, dtype=str, encoding="utf-8-sig").fillna("")
+# --------------------------------------------------------------------------- main
+def process_file(input_path, output_dir, date_fmt=DATE_OUT):
+    """Clean one raw CSV and save its processed CSV."""
+    filename = os.path.basename(input_path)
+    print(f"\nProcessing: {filename}")
+
+    required = ["title", "description", "date_of_publication",
+                "author_name", "url", "source"]
+
+    raw = pd.read_csv(input_path, dtype=str, encoding="utf-8-sig").fillna("")
+    missing = [column for column in required if column not in raw.columns]
+    if missing:
+        print(f"  Skipped: missing columns: {', '.join(missing)}")
+        return
+
     n0 = len(raw)
-    clean = preprocess(raw, args.date_format)
+    clean = preprocess(raw, date_fmt)
 
-    bad = (clean["title"].str.strip("# ").str.upper().isin(["NAME?", ""])      # Excel's "#NAME?" damage
+    bad = (clean["title"].str.strip("# ").str.upper().isin(["NAME?", ""])
            | (clean["url"] == ""))
     dropped_bad = int(bad.sum())
     clean = clean[~bad]
+
     dup = int(clean.duplicated(subset="url").sum())
     clean = clean.drop_duplicates(subset="url", keep="first")
 
-    out_path = args.output or os.path.splitext(args.input)[0] + "_clean.csv"
+    stem = os.path.splitext(filename)[0]
+    out_path = os.path.join(output_dir, f"{stem}_processed.csv")
     clean.to_csv(out_path, index=False, encoding="utf-8-sig")
-    if not args.no_xlsx:
-        xlsx_path = os.path.splitext(out_path)[0] + ".xlsx"
-        save_xlsx(clean, xlsx_path)
-        print(f"  also wrote {xlsx_path}  (open this one in Excel: column sizes and dates stay as set)")
 
-    print(f"read {n0} rows -> wrote {len(clean)} rows to {out_path}")
-    print(f"  removed {dropped_bad} unusable rows (broken title like #NAME? or invalid url), {dup} duplicate urls")
-    print(f"  rows with no date: {int((clean['date_of_publication'] == '').sum())}, "
-          f"author 'Unknown': {int((clean['author_name'] == UNKNOWN_AUTHOR).sum())}")
+    print(f"  Read {n0} rows -> wrote {len(clean)} rows to {out_path}")
+    print(f"  Removed {dropped_bad} unusable rows and {dup} duplicate URLs")
+    print(f"  Rows with no date: {(clean['date_of_publication'] == '').sum()}, "
+          f"author 'Unknown': {(clean['author_name'] == UNKNOWN_AUTHOR).sum()}")
+
+
+if __name__ == "__main__":
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    INPUT_DIR = os.path.normpath(os.path.join(
+        BASE_DIR, "..", "Task1_scrapping", "data", "raw"
+    ))
+    OUTPUT_DIR = os.path.join(BASE_DIR, "data", "processed")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    ap = argparse.ArgumentParser(
+        description="Preprocess all raw news CSV files from Task1_scrapping."
+    )
+    ap.add_argument(
+        "--input-dir", default=INPUT_DIR,
+        help="Folder containing raw CSV files (default: Task1_scrapping/data/raw)"
+    )
+    ap.add_argument(
+        "--output-dir", default=OUTPUT_DIR,
+        help="Folder for processed CSV files (default: task2_preprocessing/data/processed)"
+    )
+    ap.add_argument(
+        "--date-format", default=DATE_OUT,
+        help='Output date format (default "%d/%m/%Y")'
+    )
+    args = ap.parse_args()
+
+    if not os.path.isdir(args.input_dir):
+        raise SystemExit(f"Raw data folder not found: {args.input_dir}")
+
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    csv_files = sorted(
+        os.path.join(args.input_dir, name)
+        for name in os.listdir(args.input_dir)
+        if name.lower().endswith(".csv")
+        and name.lower() != "all_articles.csv"
+    )
+
+    if not csv_files:
+        raise SystemExit(f"No source CSV files found in: {args.input_dir}")
+
+    print(f"Raw input folder: {args.input_dir}")
+    print(f"Processed output folder: {args.output_dir}")
+    print(f"Found {len(csv_files)} source CSV files (all_articles.csv excluded).")
+
+    for csv_file in csv_files:
+        try:
+            process_file(
+                csv_file,
+                args.output_dir,
+                date_fmt=args.date_format
+            )
+        except Exception as exc:
+            print(f"  ERROR processing {os.path.basename(csv_file)}: {exc}")
+
+    print("\nPreprocessing batch completed.")
